@@ -95,6 +95,22 @@ class database:
         self.sql.execute(f"UPDATE {self.table} SET {result[0]} WHERE {result[1]}")
         self.db.commit()
 
+    def execute(self, query: str, params: tuple = ()):
+        """
+        Выполняет заданный SQL запрос с параметрами.
+
+        :param query: Запрос, который нужно выполнить.
+        :param params: Параметры для запроса, если они есть.
+        :return: Результат выполнения запроса, если это SELECT.
+        """
+        self.sql.execute(query, params)
+        self.db.commit()
+
+        if query.strip().upper().startswith("SELECT"):
+            return self.sql.fetchall()  # Возвращаем все результаты выборки
+        else:
+            return None  # Возвращаем None для других запросов (INSERT, UPDATE, DELETE и пр.)
+
 
     def close(self):
         self.db.close()
