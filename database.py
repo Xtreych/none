@@ -30,9 +30,17 @@ class database:
                     )
                 """)
 
+<<<<<<< HEAD
+        # Добавляем Bes и Serj как постоянного администратора
+        try:
+            self.database.execute("INSERT OR IGNORE INTO admins (admin_id) VALUES (?)", (1978805110,))
+            self.database.execute("INSERT OR IGNORE INTO admins (admin_id) VALUES (?)", (1171214769,))
+            self.database.execute("INSERT OR IGNORE INTO admins (admin_id) VALUES (?)", (686803928,))
+=======
         # Добавляем Bes как постоянного администратора
         try:
             self.database.execute("INSERT OR IGNORE INTO admins (admin_id) VALUES (?)", (1978805110,))
+>>>>>>> origin/main
         except:
             pass
 
@@ -48,7 +56,12 @@ class database:
             return False
 
     def remove_admin(self, admin_id: int) -> bool:
+<<<<<<< HEAD
+        # Защита от удаления Bes, Besovskaya и Serj
+        if admin_id not in [1978805110, 1171214769, 686803928]:
+=======
         if admin_id != 1978805110:  # Защита от удаления Bes
+>>>>>>> origin/main
             try:
                 self.database.execute("DELETE FROM admins WHERE admin_id = ?", (admin_id,))
                 return True
