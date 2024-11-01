@@ -1,6 +1,7 @@
 import asyncio
 import re
 from concurrent.futures import ThreadPoolExecutor
+
 from aiogram import Bot, F, Dispatcher
 from aiogram.filters import Command
 from aiogram.types import Message, CallbackQuery, FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup, \
@@ -15,7 +16,17 @@ import generator_scenary
 from theme import get_themes_for_genre
 from theme import get_full_theme_description
 
-token = "2079887601:AAEvAOrx9696k0CVgL2SOTz_Cb5_O5qBoTo"
+# print("Какой токен используем?\n"
+#       "1 - тест-бот\n"
+#       "2 - основной бот\n")
+atoken = input("Какой токен используем?\n"
+      "1 - тест-бот\n"
+      "2 - основной бот\n")
+
+if atoken == "1":
+    token = "2079887601:AAEvAOrx9696k0CVgL2SOTz_Cb5_O5qBoTo"
+else:
+    token = "7374319690:AAHLXuN-98UqMqJD0ZAkcLlrCRsoeQuGO4E"
 
 bot = Bot(token)
 dp = Dispatcher()
