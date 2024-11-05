@@ -1,9 +1,10 @@
 import sqlite3
 
+
 def select_elements(
         table: list,
         where_state: bool = False
-    ):
+):
     result = ""
     if type(table) == list:
         params = [len(table), 0]
@@ -31,9 +32,19 @@ def select_elements(
         params = [len(table), 0]
         for el in table:
             params[1] += 1
-            table[el] = f"\"{table[el]}\"" if type(table[el]) == str else str(table[el])
-            res = ", " if not where_state else " AND "
-            result += str(el) + " = " + table[el] + ("" if params[1] == params[0] else res)
+
+            # Проверяем на наличие операторов сравнения
+            if '>=' in el or '<=' in el:
+                # Извлекаем поле и оператор из ключа
+                field = el.replace('>=', '').replace('<=', '').strip()
+                operator = '>=' if '>=' in el else '<='
+                result += f"{field} {operator} {table[el]}"
+            else:
+                table[el] = f"\"{table[el]}\"" if type(table[el]) == str else str(table[el])
+                result += f"{el} = {table[el]}"
+
+            if params[1] < params[0]:
+                result += " AND "
     return result
 
 class database:
@@ -97,19 +108,17 @@ class database:
 
     def execute(self, query: str, params: tuple = ()):
         """
-        Выполняет заданный SQL запрос с параметрами.
-
-        :param query: Запрос, который нужно выполнить.
-        :param params: Параметры для запроса, если они есть.
-        :return: Результат выполнения запроса, если это SELECT.
+        Выполняет SQL запрос и возвращает результат.
         """
-        self.sql.execute(query, params)
-        self.db.commit()
-
-        if query.strip().upper().startswith("SELECT"):
-            return self.sql.fetchall()  # Возвращаем все результаты выборки
-        else:
-            return None  # Возвращаем None для других запросов (INSERT, UPDATE, DELETE и пр.)
+        try:
+            self.sql.execute(query, params)
+            self.db.commit()
+            if query.strip().upper().startswith("SELECT"):
+                return self.sql.fetchall()
+            return None
+        except Exception as e:
+            print(f"Database error in execute: {e}")
+            return None
 
 
     def close(self):
