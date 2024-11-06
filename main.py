@@ -33,7 +33,7 @@ db = database("users.db")
 thread_pool = ThreadPoolExecutor(max_workers=100)  # Создаем пул потоков
 executor = ThreadPoolExecutor(max_workers=2)
 
-if aexecutor == "2":
+if aexecutor != "1":
     backup_future = executor.submit(backup.start)
 
 link_text_news = "- Новостной канал проекта"
@@ -441,32 +441,22 @@ async def stop_chat(message: Message):
                 "Произошла ошибка при завершении диалога. Пожалуйста, попробуйте еще раз."
             )
 
-@dp.message(F.text == "Параметры поиска")
+@dp.message(F.text == "⚙️ Параметры поиска")
 async def parameters(message: Message):
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Выбрать пол", callback_data="set_preferred_gender")],
-        [InlineKeyboardButton(text="Указать возрастной диапазон", callback_data="set_age_range")],
-        [InlineKeyboardButton(text="Сбросить настройки", callback_data="reset_preferences")]
-    ])
 
     await message.answer(
         "⚙️ Настройки поиска:\n\n"
         "Выберите параметры для поиска собеседника:",
-        reply_markup=keyboard
+        reply_markup=keyboard.get_selected_parameters_keyboard()
     )
 
 
 @dp.callback_query(F.data == "set_preferred_gender")
 async def set_preferred_gender(callback: CallbackQuery):
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Мужской", callback_data="pref_gender_male")],
-        [InlineKeyboardButton(text="Женский", callback_data="pref_gender_female")],
-        [InlineKeyboardButton(text="Любой", callback_data="pref_gender_any")]
-    ])
 
     await callback.message.edit_text(
         "Выберите предпочитаемый пол собеседника:",
-        reply_markup=keyboard
+        reply_markup=keyboard.get_gender_choose_keyboard()
     )
 
 
@@ -712,7 +702,7 @@ def get_main_keyboard(user_id):
     if db.is_admin(user_id):
         buttons.append([KeyboardButton(text="👨‍💼 Админ-панель")])
 
-    buttons.append([KeyboardButton(text="Параметры поиска")])
+    buttons.append([KeyboardButton(text="⚙️ Параметры поиска")])
 
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 

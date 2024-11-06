@@ -65,3 +65,19 @@ def get_theme_keyboard(genre):
             callback_data=f"theme_{genre}_{i}"
         )])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+def get_selected_parameters_keyboard():
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Выбрать пол", callback_data="set_preferred_gender")],
+        [InlineKeyboardButton(text="Указать возрастной диапазон", callback_data="set_age_range")],
+        [InlineKeyboardButton(text="Сбросить настройки", callback_data="reset_preferences")]
+    ])
+    return keyboard
+
+def get_gender_choose_keyboard():
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Мужской", callback_data="pref_gender_male")],
+        [InlineKeyboardButton(text="Женский", callback_data="pref_gender_female")],
+        [InlineKeyboardButton(text="Любой", callback_data="pref_gender_any")]
+    ])
+    return keyboard

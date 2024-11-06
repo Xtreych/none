@@ -56,47 +56,12 @@ def format_description(text):
 
 
 def main(genre, theme):
-    #print("Генератор сцен для ролевой игры")
-    #print("=" * 40)
-
-    # Словарь подсказок для жанров
-    #genre_hints = """
-    #Доступные жанры:
-    #- Фэнтези
-    #- Научная фантастика
-    #- Постапокалипсис
-    #- Киберпанк
-    #- Стимпанк
-    #- Ужасы
-    #- Детектив
-    #"""
-
-    #print(genre_hints)
-
-    # Получение входных данных
-    # while True:
-    #     genre = input("\nВведите жанр: ").strip()
-    #     if genre:
-    #         break
-    #     print("Жанр не может быть пустым!")
-    #
-    # while True:
-    #     theme = input("Введите тему или сеттинг: ").strip()
-    #     if theme:
-    #         break
-    #     print("Тема не может быть пустой!")
-    #
-    # print("\nГенерация описания...")
-    # print("-" * 40)
 
     try:
         # Генерация и форматирование описания
         description = generate_game_description(genre, theme)
         formatted_description = format_description(description)
 
-        #print("\nСгенерированное описание сцены:")
-        #print("=" * 40)
-        #print(formatted_description)
         return formatted_description
 
     except Exception as e:
