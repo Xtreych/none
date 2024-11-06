@@ -14,9 +14,6 @@ import backup
 
 from theme import get_full_theme_description
 
-# print("Какой токен используем?\n"
-#       "1 - тест-бот\n"
-#       "2 - основной бот\n")
 atoken = input("Какой токен используем?\n"
       "1 - тест-бот\n"
       "2 - основной бот\n")
@@ -501,38 +498,6 @@ async def set_reset_preferences(callback: CallbackQuery):
         "✅ Настройки сброшены"
     )
 
-
-# @dp.message()
-# async def handle_age_input(message: Message):
-#     user_id = message.from_user.id
-#     state = user_states.get(user_id)
-#
-#     if state == "waiting_min_age":
-#         if message.text.isdigit() and 0 <= int(message.text) <= 100:
-#             min_age = int(message.text)
-#             user_states[user_id] = "waiting_max_age"
-#             db.update_search_preferences(user_id, min_age=min_age)
-#             await message.answer("Теперь введите максимальный возраст:")
-#         else:
-#             await message.answer("Пожалуйста, введите корректный возраст (0-100)")
-#
-#     elif state == "waiting_max_age":
-#         if message.text.isdigit() and 0 <= int(message.text) <= 100:
-#             max_age = int(message.text)
-#             min_age = db.get_search_preferences(user_id)["min_age"]
-#
-#             if max_age >= min_age:
-#                 db.update_search_preferences(user_id, max_age=max_age)
-#                 user_states[user_id] = None
-#                 await message.answer(
-#                     f"✅ Возрастной диапазон установлен: {min_age}-{max_age} лет",
-#                     reply_markup=get_main_keyboard(user_id)
-#                 )
-#             else:
-#                 await message.answer("Максимальный возраст должен быть больше минимального")
-#         else:
-#             await message.answer("Пожалуйста, введите корректный возраст (0-100)")
-
 @dp.callback_query(F.data == "back_to_admin")
 async def back_to_admin(callback: CallbackQuery):
     await callback.message.edit_text(
@@ -601,7 +566,7 @@ async def handle_referral_input(message: Message):
         )
     user_states[message.from_user.id] = None
 
-# Добавим обработчик для проверки статуса пользователя
+# Обработчик для проверки статуса пользователя
 @dp.callback_query(F.data == "check_status")
 async def check_user_status(callback: CallbackQuery):
     user_id = callback.from_user.id
@@ -661,6 +626,38 @@ async def handler_message(message: Message):
                 # Завершаем чат при ошибке отправки
                 db.stop_chat(message.from_user.id, user["rid"])
                 return
+
+        elif state == "waiting_ref_code":
+            try:
+                code, owner_id = message.text.split()
+                owner_id = int(owner_id)
+                if db.add_referral_code(code, owner_id):
+                    await message.answer("✅ Реферальный код успешно добавлен!")
+                else:
+                    await message.answer("❌ Ошибка при добавлении кода!")
+            except:
+                await message.answer("❌ Неверный формат! Используйте: код ID")
+
+            user_states[message.from_user.id] = None
+            await message.answer(
+                "Панель администратора",
+                reply_markup=keyboard.get_admin_keyboard()
+            )
+        elif state == "waiting_admin_id":
+            try:
+                new_admin_id = int(message.text)
+                if db.add_admin(new_admin_id):
+                    await message.answer(f"✅ Администратор (ID: {new_admin_id}) успешно добавлен!")
+                else:
+                    await message.answer("❌ Ошибка при добавлении администратора!")
+            except:
+                await message.answer("❌ Неверный формат ID!")
+
+            user_states[message.from_user.id] = None
+            await message.answer(
+                "Панель администратора",
+                reply_markup=keyboard.get_admin_keyboard()
+            )
 
         # Обработка остальных состояний
         elif state == "waiting_min_age":
