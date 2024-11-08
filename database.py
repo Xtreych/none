@@ -41,6 +41,38 @@ class database:
         except:
             pass
 
+        # Создаем таблицу для жалоб
+        self.database.execute("""
+            CREATE TABLE IF NOT EXISTS complaints (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                from_user INTEGER,
+                against_user INTEGER,
+                complaint_text TEXT,
+                status TEXT DEFAULT 'pending',
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Создаем таблицу для сообщений
+        self.database.execute("""
+            CREATE TABLE IF NOT EXISTS messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                from_user INTEGER,
+                to_user INTEGER,
+                message_text TEXT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Создаем таблицу для блокировок
+        self.database.execute("""
+            CREATE TABLE IF NOT EXISTS user_blocks (
+                user_id INTEGER PRIMARY KEY,
+                blocked_until DATETIME,
+                reason TEXT
+            )
+        """)
+
     def is_admin(self, user_id: int) -> bool:
         result = self.database.execute("SELECT admin_id FROM admins WHERE admin_id = ?", (user_id,))
         return bool(result)
@@ -161,7 +193,7 @@ class database:
             0, # min_age
             0 # max_age
         ])
-        # при создании нового столбца в бд, не забывай добавить стартовое значение сюда
+        # при сздании нового столбца в бд, не забывай добавить стартовое значение сюда
 
     def search(self, user_id: int):
         # Получаем предпочтения пользователя
@@ -183,7 +215,7 @@ class database:
             AND id != {user_id}
         """
 
-        # Добавляем условия поиска на основе предпочтений пользователя
+        # Добавл��ем словия поиска на основе предпочтений пользователя
         if user_prefs:
             if user_prefs["preferred_gender"] != "any" and user_prefs["preferred_gender"] is not None:
                 query += f" AND gender = '{user_prefs['preferred_gender']}'"
@@ -230,7 +262,7 @@ class database:
         # Соединяем пользователей
         self.start_chat(user_id, suitable_user[0])
 
-        # Возвращаем информацию о найденном пользователе
+        # Возвращаем информаю о найденном пользователе
         return {
             "id": suitable_user[0],
             "status": 2,
@@ -334,3 +366,89 @@ class database:
                 "max_age": result[2]
             }
         return None
+
+    def add_complaint(self, from_user: int, against_user: int, complaint_text: str) -> bool:
+        try:
+            self.database.execute(
+                "INSERT INTO complaints (from_user, against_user, complaint_text) VALUES (?, ?, ?)",
+                (from_user, against_user, complaint_text)
+            )
+            return True
+        except:
+            return False
+
+    def get_pending_complaints(self):
+        try:
+            return self.database.execute(
+                "SELECT * FROM complaints WHERE status = 'pending' ORDER BY timestamp DESC"
+            )
+        except:
+            return []
+
+    def get_all_complaints(self):
+        try:
+            return self.database.execute(
+                "SELECT * FROM complaints ORDER BY timestamp DESC"
+            )
+        except:
+            return []
+
+    def update_complaint_status(self, complaint_id: int, status: str, admin_comment: str = None) -> bool:
+        try:
+            self.database.execute(
+                "UPDATE complaints SET status = ?, admin_comment = ? WHERE id = ?",
+                (status, admin_comment, complaint_id)
+            )
+            return True
+        except Exception as e:
+            print(f"Error in update_complaint_status: {e}")
+            return False
+
+    def save_message(self, from_user: int, to_user: int, message_text: str) -> bool:
+        try:
+            self.database.execute(
+                "INSERT INTO messages (from_user, to_user, message_text) VALUES (?, ?, ?)",
+                (from_user, to_user, message_text)
+            )
+            return True
+        except Exception as e:
+            print(f"Error saving message: {e}")
+            return False
+
+    def get_chat_history(self, user1_id: int, user2_id: int, limit: int = 10) -> list:
+        try:
+            return self.database.execute("""
+                SELECT from_user, message_text, timestamp 
+                FROM messages 
+                WHERE (from_user = ? AND to_user = ?) OR (from_user = ? AND to_user = ?)
+                ORDER BY timestamp DESC 
+                LIMIT ?
+            """, (user1_id, user2_id, user2_id, user1_id, limit))
+        except Exception as e:
+            print(f"Error getting chat history: {e}")
+            return []
+
+    def block_user(self, user_id: int, hours: int, reason: str = None) -> bool:
+        try:
+            self.database.execute("""
+                INSERT OR REPLACE INTO user_blocks (user_id, blocked_until, reason)
+                VALUES (?, datetime('now', '+' || ? || ' hours'), ?)
+            """, (user_id, hours, reason))
+            return True
+        except Exception as e:
+            print(f"Error in block_user: {e}")
+            return False
+
+    def is_user_blocked(self, user_id: int) -> tuple[bool, str]:
+        try:
+            result = self.database.execute("""
+                SELECT blocked_until, reason 
+                FROM user_blocks 
+                WHERE user_id = ? AND blocked_until > datetime('now')
+            """, (user_id,))
+            if result:
+                return True, result[0][1]  # Возвращаем True и причину блокировки
+            return False, None
+        except Exception as e:
+            print(f"Error checking block status: {e}")
+            return False, None

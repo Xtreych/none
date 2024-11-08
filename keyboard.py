@@ -9,6 +9,7 @@ def get_admin_keyboard():
         [InlineKeyboardButton(text="➖ Удалить реферальный код", callback_data="remove_ref_code")],
         [InlineKeyboardButton(text="👥 Управление администраторами", callback_data="manage_admins")],
         [InlineKeyboardButton(text="📊 Статистика рефералов", callback_data="ref_stats")],
+        [InlineKeyboardButton(text="📋 Рассмотреть жалобы", callback_data="view_complaints")],
     ])
     return keyboard
 
@@ -34,6 +35,7 @@ def get_cancel_keyboard():
     builder = ReplyKeyboardBuilder()
     builder.button(text="❌ Завершить диалог")
     builder.button(text="Сценарий")
+    builder.button(text="⚠️ Пожаловаться")
     return builder.as_markup(resize_keyboard=True)
 
 def get_genre_keyboard():
