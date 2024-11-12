@@ -85,3 +85,18 @@ def get_gender_choose_keyboard():
         [InlineKeyboardButton(text="Любой", callback_data="pref_gender_any")]
     ])
     return keyboard
+
+def get_complaint_reasons_keyboard():
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="1. Нарушение анонимности", callback_data="complaint_1")],
+        [InlineKeyboardButton(text="2. Откровенные материалы", callback_data="complaint_2")],
+        [InlineKeyboardButton(text="3. Оскорбления", callback_data="complaint_3")],
+        [InlineKeyboardButton(text="4. Отклонение от тематики", callback_data="complaint_4")],
+        [InlineKeyboardButton(text="5. Спам/реклама", callback_data="complaint_5")],
+        [InlineKeyboardButton(text="6. Угрозы/агрессия", callback_data="complaint_6")],
+        [InlineKeyboardButton(text="7. Игнорирование жалоб", callback_data="complaint_7")],
+        [InlineKeyboardButton(text="8. Негатив к креативности", callback_data="complaint_8")],
+        [InlineKeyboardButton(text="9. Игнорирование администрации", callback_data="complaint_9")],
+        [InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_complaint")]
+    ])
+    return keyboard

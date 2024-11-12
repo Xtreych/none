@@ -177,7 +177,7 @@ async def referral_code_request(message: Message):
     else:
         # Если обычный пользователь, предлагаем ввести код
         await message.answer(
-            "�� Пожалуйста, введите реферальный код:",
+            " Пожалуйста, введите реферальный код:",
             reply_markup=keyboard.get_back_keyboard()
         )
         user_states[message.from_user.id] = 'awaiting_referral_code'
@@ -330,7 +330,7 @@ async def search_chat(message: Message):
             else:
                 # Отправляем сообщение обоим пользователям
                 string = "✅ Игрок найден!\n"
-                string += "Чтобы завершить диалог, нажм��те \"❌ Завершить диалог\""
+                string += "Чтобы завершить диалог, нажмите \"❌ Завершить диалог\""
 
                 await message.answer(string, reply_markup=keyboard.get_cancel_keyboard())
                 try:
@@ -434,14 +434,14 @@ async def handle_theme_selection(callback_query: CallbackQuery):
         if user and user["status"] == 2 and user["rid"] != 0:
             await bot.send_message(
                 user["rid"],
-                f"⏳ Ва собеседник сгенеривал сценарий:\n\n{scenario}"
+                f"⏳ Ва собеседик сгенеривал сценарий:\n\n{scenario}"
             )
 
     except Exception as e:
-        error_message = "❌ Произошла ошибка при генерации сценария. Пожалуйста, попробуйте еще раз."
+        error_message = "❌ Произошла ошибка при генерации сценария. Пожалуйса, попробуйте еще раз."
         print(f"Error generating scenario: {e}")
 
-        # Отправляем сообщение об ошибке инициатору
+        # Отправляем сообщение об ошибке инциатору
         await callback_query.message.edit_text(
             error_message,
             reply_markup=keyboard.get_genre_keyboard()
@@ -542,7 +542,7 @@ async def set_preferred_gender(callback: CallbackQuery):
 async def set_age_range(callback: CallbackQuery):
     user_states[callback.from_user.id] = "waiting_min_age"
     await callback.message.edit_text(
-        "Введите минимальный возраст (или введите 0 для любого возраста):"
+        "Введите минимальный возраст (или ��ведите 0 для любого возраста):"
     )
 
 
@@ -569,15 +569,15 @@ async def set_reset_preferences(callback: CallbackQuery):
 @dp.callback_query(F.data == "back_to_admin")
 async def back_to_admin(callback: CallbackQuery):
     await callback.message.edit_text(
-        "👨‍💼 Панель администратора\n\n"
-        "Выберите действие:",
+        "👨‍💼 Панель администртора\n\n"
+        "Выберите ��ействие:",
         reply_markup=keyboard.get_admin_keyboard()
     )
 
 @dp.callback_query(F.data == "remove_admin")
 async def remove_admin_start(callback: CallbackQuery):
     if callback.from_user.id not in [Bes, Besovskaya, Serj]:
-        await callback.answer("То��ько главный администратор может удалять администраторов!",
+        await callback.answer("Тоько главный администратор может удалять администраторов!",
                               show_alert=True)
         return
 
@@ -632,7 +632,6 @@ async def handle_referral_input(message: Message):
             "❌ Неверный реферальный код!",
             reply_markup=get_main_keyboard(message.from_user.id)
         )
-    user_states[message.from_user.id] = None
 
 # Об
 @dp.callback_query(F.data == "check_status")
@@ -649,10 +648,9 @@ async def handle_complaint(message: Message):
     user = db.get_user_cursor(message.from_user.id)
     
     if user and user["status"] == 2 and user["rid"] != 0:
-        user_states[message.from_user.id] = "awaiting_complaint"
         await message.answer(
-            "📝 Опишите причину жалобы на пльзоватея:",
-            reply_markup=keyboard.get_back_keyboard()
+            "📝 Выберите причину жалобы:",
+            reply_markup=keyboard.get_complaint_reasons_keyboard()
         )
     else:
         await message.answer(
@@ -662,6 +660,41 @@ async def handle_complaint(message: Message):
 
 @dp.message()
 async def handler_message(message: Message):
+    state = user_states.get(message.from_user.id)
+    
+    if state and state.startswith("awaiting_complaint_details_"):
+        reason_number = int(state.split("_")[-1])
+        user = db.get_user_cursor(message.from_user.id)
+        
+        if user and user["status"] == 2 and user["rid"] != 0:
+            reason_texts = {
+                1: "Нарушение анонимности",
+                2: "Распространение откровенных материалов",
+                3: "Оскорбления/уничижительные высказывания",
+                4: "Отклонение от тематики ролевых игр",
+                5: "Спам/реклама",
+                6: "Угрозы/агрессивное поведение",
+                7: "Игнорирование кнопки жалобы",
+                8: "Негатив к креативности",
+                9: "Игнорирование администрации"
+            }
+            
+            full_complaint = f"Причина: {reason_texts[reason_number]}\n\nДетали: {message.text}"
+            
+            if db.add_complaint(message.from_user.id, user["rid"], full_complaint):
+                await message.answer(
+                    "✅ Жалоба отправлена администрации.",
+                    reply_markup=keyboard.get_cancel_keyboard()
+                )
+            else:
+                await message.answer(
+                    "❌ Произошла ошибка при отправке жалобы.",
+                    reply_markup=keyboard.get_cancel_keyboard()
+                )
+            
+            user_states[message.from_user.id] = None
+            return
+
     user = db.get_user_cursor(message.from_user.id)
     idinty = message.from_user.id
     state = user_states.get(message.from_user.id)
@@ -693,7 +726,7 @@ async def handler_message(message: Message):
             else:
                 await message.answer("❌ Пожалуйста, введите число от 1 до 168 (часов)")
         except ValueError:
-            await message.answer("❌ Пожалуйст��, введите корректное число часов")
+            await message.answer("❌ Пожалуйст, введите корректное число часов")
         
         user_states[message.from_user.id] = None
         await message.answer(
@@ -703,22 +736,9 @@ async def handler_message(message: Message):
 
     if user is not None:
         if user["status"] == 2 and user["rid"] != 0:
-            if state == "awaiting_complaint":
-                if db.add_complaint(message.from_user.id, user["rid"], message.text):
-                    await message.answer(
-                        "✅ Жалоба отправлена администрации.",
-                        reply_markup=keyboard.get_cancel_keyboard()
-                    )
-                else:
-                    await message.answer(
-                        "❌ Произошла ошибка при отправке жалобы.",
-                        reply_markup=keyboard.get_cancel_keyboard()
-                    )
-                user_states[message.from_user.id] = None
-                return
             
             try:
-                # Сохраняем текстовое сообщение
+                # Сохраняем текс��овое сообщение
                 if message.text and not state:
                     db.save_message(message.from_user.id, user["rid"], message.text)
                     await bot.send_message(
@@ -758,7 +778,7 @@ async def handler_message(message: Message):
             except Exception as e:
                 print(f"Error sending message: {e}")
                 await message.answer(
-                    "❌ Оибка при отправке сообщения. Возможно, собеседник покинул чат.",
+                    "❌ Оибка при отправке сообщения. Возможно, обеседник покинул чат.",
                     reply_markup=get_main_keyboard(idinty)
                 )
                 db.stop_chat(message.from_user.id, user["rid"])
@@ -802,7 +822,7 @@ async def handler_message(message: Message):
                 min_age = int(message.text)
                 user_states[idinty] = "waiting_max_age"
                 db.update_search_preferences(idinty, min_age=min_age)
-                await message.answer("Теперь введите максимальный возраст:")
+                await message.answer("Теперь введите максимальный взраст:")
             else:
                 await message.answer("Пожалуйста, введите корректный возраст (0-100)")
 
@@ -816,8 +836,7 @@ async def handler_message(message: Message):
                     user_states[idinty] = None
                     await message.answer(
                         f"✅ Возрастной диапазон установлен: {min_age}-{max_age} лет",
-                        reply_markup=get_main_keyboard(idinty)
-                    )
+                        reply_markup=get_main_keyboard(idinty))
                 else:
                     await message.answer("Максимальный возраст должен быть больше минимального")
             else:
@@ -853,7 +872,7 @@ async def handler_message(message: Message):
                     )
             else:
                 await message.answer(
-                    "Вы можете отправить жалобу только во время активного дилога.",
+                    "Вы можете отправить жалобу только во врем активного дилога.",
                     reply_markup=keyboard.get_cancel_keyboard()
                 )
             user_states[message.from_user.id] = None
@@ -876,7 +895,6 @@ async def view_complaints(callback: CallbackQuery):
 
     keyboard = []
     for complaint in complaints:
-        # Безопасное получение значений из кортежа
         complaint_id = complaint[0]
         from_user = complaint[1]
         text = complaint[3] if len(complaint) > 3 else "Нет текста"
@@ -884,93 +902,155 @@ async def view_complaints(callback: CallbackQuery):
         short_text = text[:30] + "..." if len(text) > 30 else text
         keyboard.append([InlineKeyboardButton(
             text=f"#{complaint_id} от {from_user}: {short_text}",
-            callback_data=f"complaint_{complaint_id}"
+            callback_data=f"view_complaint_{complaint_id}"
         )])
     
     keyboard.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="back_to_admin")])
     
-    # Используем edit_text для callback и send_message для обычного сообщения
-    if isinstance(callback, CallbackQuery):
-        await callback.message.edit_text(
-            "📋 Список активных жалоб:",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
-        )
-    else:
-        await bot.send_message(
-            callback.from_user.id,
-            "📋 ��писок активных жалоб:",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
-        )
-
-@dp.callback_query(F.data.startswith("complaint_"))
-async def handle_complaint_action(callback: CallbackQuery):
-    complaint_id = int(callback.data.split('_')[1])
-    complaints = db.get_pending_complaints()
-    complaint = next((c for c in complaints if c[0] == complaint_id), None)
-    
-    if not complaint:
-        await callback.answer("Жалоба не найдена", show_alert=True)
-        return
-
-    # Безопасное плучение значений из кортежа
-    complaint_id = complaint[0]
-    from_user = complaint[1]
-    against_user = complaint[2]
-    complaint_text = complaint[3]
-    status = complaint[4]
-    timestamp = complaint[5]
-    admin_comment = complaint[6] if len(complaint) > 6 else None
-
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="✅ Принять", callback_data=f"approve_complaint_{complaint_id}"),
-            InlineKeyboardButton(text="❌ Отклонить", callback_data=f"reject_complaint_{complaint_id}")
-        ],
-        [
-            InlineKeyboardButton(text="🚫 Заблокировать пользователя", 
-                               callback_data=f"block_user_{against_user}")
-        ],
-        [InlineKeyboardButton(text="⬅️ Назад", callback_data="view_complaints")]
-    ])
-
-    message_text = (
-        f"📝 Жалоба #{complaint_id}\n"
-        f"О: {from_user}\n"
-        f"На: {against_user}\n"
-        f"Текст: {complaint_text}\n"
-        f"Статус: {status}\n"
-        f"Время: {timestamp}\n"
+    await callback.message.edit_text(
+        "📋 Список активных жалоб:",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
     )
-    if admin_comment:
-        message_text += f"Комментарий админа: {admin_comment}"
 
-    await callback.message.edit_text(message_text, reply_markup=keyboard)
-
-@dp.callback_query(F.data.startswith(("approve_complaint_", "reject_complaint_")))
-async def process_complaint(callback: CallbackQuery):
+@dp.callback_query(F.data.startswith("view_complaint_"))
+async def view_single_complaint(callback: CallbackQuery):
     if not db.is_admin(callback.from_user.id):
         await callback.answer("У вас нет прав администратора!", show_alert=True)
         return
 
-    action, complaint_id = callback.data.split("_")[1:3]
-    complaint_id = int(complaint_id)
-    
-    if action == "reject":
-        if db.update_complaint_status(complaint_id, "rejected", "Отклонено администратором"):
-            await callback.answer("Жалоба отклонена!")
-            await view_complaints(callback)
-        else:
-            await callback.answer("Ошибка при обработке жалобы!")
-    else:  # approve
-        # Сохраняем ID жалобы в состоянии пользователя
-        user_states[callback.from_user.id] = f"awaiting_block_hours_{complaint_id}"
+    try:
+        complaint_id = int(callback.data.split("_")[2])
+        complaint_details = db.get_complaint_details(complaint_id)
         
-        await callback.message.edit_text(
-            "Введите количество часов блокировки (от 1 до 168 часов):",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="⬅️ Отмена", callback_data="view_complaints")]
-            ])
+        if not complaint_details or len(complaint_details) == 0:
+            await callback.answer("Жалоба не найдена", show_alert=True)
+            return
+            
+        complaint = complaint_details[0]
+        from_user = complaint[1]
+        against_user = complaint[2]
+        complaint_text = complaint[3]
+        status = complaint[4]
+        timestamp = complaint[5]
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✅ Принять", callback_data=f"approve_{complaint_id}"),
+                InlineKeyboardButton(text="❌ Отклонить", callback_data=f"reject_{complaint_id}")
+            ],
+            [
+                InlineKeyboardButton(text="🚫 Заблокировать", callback_data=f"block_user_{against_user}")
+            ],
+            [InlineKeyboardButton(text="⬅️ Назад к списку", callback_data="view_complaints")]
+        ])
+
+        message_text = (
+            f"📝 Жалоба #{complaint_id}\n\n"
+            f"От пользователя: {from_user}\n"
+            f"На пользователя: {against_user}\n"
+            f"Текст жалобы: {complaint_text}\n"
+            f"Статус: {status}\n"
+            f"Время подачи: {timestamp}"
         )
+
+        await callback.message.edit_text(
+            message_text,
+            reply_markup=keyboard
+        )
+        
+    except Exception as e:
+        print(f"Error in view_single_complaint: {e}")
+        await callback.answer("Произошла ошибка при просмотре жалобы", show_alert=True)
+
+@dp.callback_query(F.data.startswith(("approve_", "reject_")))
+async def handle_complaint_action(callback: CallbackQuery):
+    if not db.is_admin(callback.from_user.id):
+        await callback.answer("У вас нет прав администратора!", show_alert=True)
+        return
+
+    try:
+        action, complaint_id = callback.data.split("_")
+        complaint_id = int(complaint_id)
+        
+        # Получаем детали жалобы
+        complaint_details = db.get_complaint_details(complaint_id)
+        if not complaint_details or len(complaint_details) == 0:
+            await callback.answer("Жалоба не найдена", show_alert=True)
+            return
+            
+        complaint = complaint_details[0]
+        against_user = complaint[2]
+        complaint_text = complaint[3]
+        
+        if action == "reject":
+            # Удаляем отклоненную жалобу
+            if db.delete_complaint(complaint_id):
+                await callback.answer("Жалоба отклонена и удалена!")
+                await view_complaints(callback)
+            else:
+                await callback.answer("Ошибка при удалении жалобы!")
+                
+        elif action == "approve":
+            # Определяем причину жалобы из текста
+            reason_match = re.search(r"Причина: (.*?)$", complaint_text)
+            if not reason_match:
+                await callback.answer("Ошибка: не удалось определить причину жалобы")
+                return
+                
+            reason = reason_match.group(1)
+            
+            # Словарь наказаний (в часах) согласно правилам
+            punishments = {
+                "Нарушение анонимности": 24,
+                "Распространение откровенных материалов": 48,
+                "Оскорбления/уничижительные высказывания": 48,
+                "Отклонение от тематики ролевых игр": 12,
+                "Спам/реклама": 24,
+                "Угрозы/агрессивное поведение": 168,  # 1 неделя
+                "Игнорирование кнопки жалобы": 12,
+                "Негатив к креативности": 12,
+                "Игнорирование администрации": 12
+            }
+            
+            block_hours = punishments.get(reason)
+            if not block_hours:
+                await callback.answer("Ошибка: неизвестная причина жалобы")
+                return
+                
+            # Проверяем, не заблокирован ли уже пользователь
+            is_blocked, current_reason = db.is_user_blocked(against_user)
+            if is_blocked:
+                # Если это повторное нарушение того же типа, увеличиваем срок
+                if reason in current_reason:
+                    block_hours *= 2  # Удваиваем срок за повторное нарушение
+            
+            # Блокируем пользователя
+            if db.block_user(against_user, block_hours, f"Нарушение: {reason}"):
+                # Обновляем статус жалобы
+                db.update_complaint_status(complaint_id, "approved", f"Назначено наказание: {block_hours} часов")
+                
+                # Отправляем уведомление заблокированному пользователю
+                try:
+                    await bot.send_message(
+                        against_user,
+                        f"⛔️ Ваш аккаунт заблокирован на {block_hours} часов.\n"
+                        f"Причина: {reason}\n"
+                        f"Для получения подробной информации нажмите кнопку ниже.",
+                        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                            [InlineKeyboardButton(text="ℹ️ Информация о блокировке", callback_data="block_info")]
+                        ])
+                    )
+                except Exception as e:
+                    print(f"Error sending block notification: {e}")
+                
+                await callback.answer(f"Жалоба принята! Пользователь заблокирован на {block_hours} часов")
+                await view_complaints(callback)
+            else:
+                await callback.answer("Ошибка при блокировке пользователя!")
+                
+    except Exception as e:
+        print(f"Error in handle_complaint_action: {e}")
+        await callback.answer("Произошла ошибка при обработке жалобы")
 
 @dp.callback_query(F.data == "archived_complaints")
 async def view_archived_complaints(callback: CallbackQuery):
@@ -1046,7 +1126,7 @@ async def manage_blocks(callback: CallbackQuery):
     
     await callback.message.edit_text(
         "🔓 Управление блокировками:\n"
-        "Нажмите на пользователя для досроч��ой разблокировки",
+        "Нажмите на пользователя для досрочой разблокировки",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
     )
 
@@ -1075,7 +1155,7 @@ async def view_archived_complaint(callback: CallbackQuery):
     complaint = next((c for c in complaints if c[0] == complaint_id), None)
 
     if not complaint:
-        await callback.answer("Жалоба не найдена", show_alert=True)
+        await callback.answer("Жалоба не найдна", show_alert=True)
         return
 
     # Распаковываем данные жалобы
@@ -1165,6 +1245,121 @@ async def show_block_info_button(message: Message):
     )
 
     await message.answer(message_text)
+
+@dp.callback_query(F.data.startswith("complaint_"))
+async def handle_complaint_reason(callback: CallbackQuery):
+    if callback.data == "cancel_complaint":
+        await callback.message.edit_text(
+            "❌ Отправка жалобы отменена.",
+            reply_markup=None
+        )
+        return
+        
+    try:
+        reason_number = int(callback.data.split("_")[1])
+        user = db.get_user_cursor(callback.from_user.id)
+        
+        if user and user["status"] == 2 and user["rid"] != 0:
+            reasons = {
+                1: "Нарушение анонимности",
+                2: "Распространение откровенных материалов",
+                3: "Оскорбления/уничижительные высказывания",
+                4: "Отклонение от тематики ролевых игр",
+                5: "Спам/реклама",
+                6: "Угрозы/агрессивное поведение",
+                7: "Игнорирование кнопки жалобы",
+                8: "Негатив к креативности",
+                9: "Игнорирование администрации"
+            }
+            
+            if reason_number in reasons:
+                complaint_text = f"Причина: {reasons[reason_number]}"
+                
+                if db.add_complaint(callback.from_user.id, user["rid"], complaint_text):
+                    await callback.message.edit_text(
+                        "✅ Жалоба отправлена администрации.",
+                        reply_markup=None
+                    )
+                else:
+                    await callback.message.edit_text(
+                        "❌ Произошла ошибка при отправке жалобы.",
+                        reply_markup=None
+                    )
+            else:
+                await callback.message.edit_text(
+                    "❌ Неверная причина жалобы.",
+                    reply_markup=None
+                )
+    except ValueError:
+        await callback.message.edit_text(
+            "❌ Неверный формат данных жалобы.",
+            reply_markup=None
+        )
+    except Exception as e:
+        print(f"Error in handle_complaint_reason: {e}")
+        await callback.message.edit_text(
+            "❌ Произошла ошибка при обработке жалобы.",
+            reply_markup=None
+        )
+
+@dp.callback_query(F.data == "cancel_complaint")
+async def cancel_complaint(callback: CallbackQuery):
+    user_states[callback.from_user.id] = None
+    await callback.message.edit_text(
+        "❌ Отправка жалобы отменена.",
+        reply_markup=keyboard.get_cancel_keyboard()
+    )
+
+@dp.callback_query(lambda c: c.data.startswith("complaint_") and len(c.data.split("_")) == 2)
+async def view_single_complaint(callback: CallbackQuery):
+    if not db.is_admin(callback.from_user.id):
+        await callback.answer("У вас нет прав администратора!", show_alert=True)
+        return
+
+    try:
+        complaint_id = int(callback.data.split("_")[1])
+        complaint_details = db.get_complaint_details(complaint_id)
+        
+        if not complaint_details or len(complaint_details) == 0:
+            await callback.answer("Жалоба не найдена", show_alert=True)
+            return
+            
+        complaint = complaint_details[0]
+        from_user = complaint[1]
+        against_user = complaint[2]
+        complaint_text = complaint[3]
+        status = complaint[4]
+        timestamp = complaint[5]
+        admin_comment = complaint[6] if len(complaint) > 6 else None
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✅ Принять", callback_data=f"approve_{complaint_id}"),
+                InlineKeyboardButton(text="❌ Отклонить", callback_data=f"reject_{complaint_id}")
+            ],
+            [
+                InlineKeyboardButton(text="🚫 Заблокировать пользователя", 
+                                   callback_data=f"block_user_{against_user}")
+            ],
+            [InlineKeyboardButton(text="⬅️ Назад", callback_data="view_complaints")]
+        ])
+
+        message_text = (
+            f"📝 Жалоба #{complaint_id}\n"
+            f"От: {from_user}\n"
+            f"На: {against_user}\n"
+            f"Текст: {complaint_text}\n"
+            f"Статус: {status}\n"
+            f"Время: {timestamp}\n"
+        )
+        if admin_comment:
+            message_text += f"Комментарий админа: {admin_comment}"
+
+        await callback.message.edit_text(message_text, reply_markup=keyboard)
+        
+    except Exception as e:
+        print(f"Error in view_single_complaint: {e}")
+        await callback.answer("Произошла ошибка при просмотре жалобы", show_alert=True)
 
 async def main():
     await dp.start_polling(bot)

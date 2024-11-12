@@ -533,3 +533,14 @@ class database:
         except Exception as e:
             print(f"Error getting block info: {e}")
             return None
+
+    def delete_complaint(self, complaint_id: int) -> bool:
+        try:
+            self.database.execute(
+                "DELETE FROM complaints WHERE id = ?",
+                (complaint_id,)
+            )
+            return True
+        except Exception as e:
+            print(f"Error deleting complaint: {e}")
+            return False
