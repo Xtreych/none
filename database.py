@@ -49,7 +49,8 @@ class database:
                 against_user INTEGER,
                 complaint_text TEXT,
                 status TEXT DEFAULT 'pending',
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                admin_comment TEXT
             )
         """)
 
@@ -215,7 +216,7 @@ class database:
             AND id != {user_id}
         """
 
-        # Добавл��ем словия поиска на основе предпочтений пользователя
+        # Добавлм словия поиска на основе предпочтений пользователя
         if user_prefs:
             if user_prefs["preferred_gender"] != "any" and user_prefs["preferred_gender"] is not None:
                 query += f" AND gender = '{user_prefs['preferred_gender']}'"
@@ -452,3 +453,62 @@ class database:
         except Exception as e:
             print(f"Error checking block status: {e}")
             return False, None
+
+    def get_archived_complaints(self):
+        try:
+            return self.database.execute("""
+                SELECT c.*, m.message_text, m.timestamp as message_time
+                FROM complaints c
+                LEFT JOIN messages m ON 
+                    (m.from_user = c.from_user AND m.to_user = c.against_user) OR
+                    (m.from_user = c.against_user AND m.to_user = c.from_user)
+                WHERE c.status IN ('approved', 'rejected')
+                ORDER BY c.timestamp DESC
+            """)
+        except Exception as e:
+            print(f"Error getting archived complaints: {e}")
+            return []
+
+    def unblock_user(self, user_id: int) -> bool:
+        try:
+            self.database.execute("""
+                DELETE FROM user_blocks 
+                WHERE user_id = ?
+            """, (user_id,))
+            return True
+        except Exception as e:
+            print(f"Error unblocking user: {e}")
+            return False
+
+    def get_complaint_details(self, complaint_id: int):
+        try:
+            return self.database.execute("""
+                SELECT c.*, m.message_text, m.timestamp as message_time
+                FROM complaints c
+                LEFT JOIN messages m ON 
+                    (m.from_user = c.from_user AND m.to_user = c.against_user) OR
+                    (m.from_user = c.against_user AND m.to_user = c.from_user)
+                WHERE c.id = ?
+                ORDER BY m.timestamp DESC
+                LIMIT 1
+            """, (complaint_id,))
+        except Exception as e:
+            print(f"Error getting complaint details: {e}")
+            return None
+
+    def get_blocked_users(self):
+        try:
+            return self.database.execute("""
+                SELECT 
+                    b.user_id,
+                    b.blocked_until,
+                    b.reason,
+                    c.id as complaint_id
+                FROM user_blocks b
+                LEFT JOIN complaints c ON c.against_user = b.user_id AND c.status = 'approved'
+                WHERE b.blocked_until > datetime('now')
+                ORDER BY b.blocked_until DESC
+            """)
+        except Exception as e:
+            print(f"Error getting blocked users: {e}")
+            return []

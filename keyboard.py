@@ -10,6 +10,8 @@ def get_admin_keyboard():
         [InlineKeyboardButton(text="👥 Управление администраторами", callback_data="manage_admins")],
         [InlineKeyboardButton(text="📊 Статистика рефералов", callback_data="ref_stats")],
         [InlineKeyboardButton(text="📋 Рассмотреть жалобы", callback_data="view_complaints")],
+        [InlineKeyboardButton(text="📁 Архив жалоб", callback_data="archived_complaints")],
+        [InlineKeyboardButton(text="🔓 Управление блокировками", callback_data="manage_blocks")]
     ])
     return keyboard
 
