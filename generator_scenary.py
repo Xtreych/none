@@ -1,6 +1,8 @@
 from transformers import pipeline
 import torch
 import re
+import logging
+from typing import Optional
 
 
 def generate_game_description(genre, theme):
@@ -44,28 +46,55 @@ def generate_game_description(genre, theme):
         return f"Произошла ошибка при генерации текста: {str(e)}"
 
 
-def format_description(text):
-    """Форматирование текста для лучшей читаемости"""
-    paragraphs = text.split('. ')
-    formatted_text = ''
-    for i, paragraph in enumerate(paragraphs):
-        if i > 0 and i % 2 == 0:  # Каждые два предложения - новый абзац
-            formatted_text += '\n\n'
-        formatted_text += paragraph.strip() + '. '
-    return formatted_text
+def format_description(text: str) -> str:
+    """Улучшенное форматирование текста"""
+    if not text:
+        return ""
+    
+    # Сохраняем сокращения
+    abbreviations = {
+        "т.д.": "__TD__",
+        "т.п.": "__TP__",
+        "и т.д.": "__ITD__",
+        "и т.п.": "__ITP__"
+    }
+    
+    for abbr, placeholder in abbreviations.items():
+        text = text.replace(abbr, placeholder)
+    
+    # Разбиваем на предложения
+    sentences = re.split(r'(?<=[.!?])\s+', text)
+    formatted_text = []
+    
+    for i, sentence in enumerate(sentences):
+        # Восстанавливаем сокращения
+        for abbr, placeholder in abbreviations.items():
+            sentence = sentence.replace(placeholder, abbr)
+            
+        formatted_text.append(sentence.strip())
+        if i > 0 and i % 2 == 0:
+            formatted_text.append("\n\n")
+    
+    return " ".join(formatted_text)
 
 
-def main(genre, theme):
-
+def main(genre: str, theme: str) -> Optional[str]:
+    """Основная функция генерации сценария"""
     try:
-        # Генерация и форматирование описания
         description = generate_game_description(genre, theme)
+        if not description:
+            logging.error("Empty description generated")
+            return "Произошла ошибка при генерации сценария. Попробуйте еще раз."
+            
         formatted_description = format_description(description)
-
         return formatted_description
 
+    except ValueError as ve:
+        logging.error(f"Validation error in scenario generation: {ve}")
+        return "Неверные параметры для генерации сценария."
     except Exception as e:
-        print(f"Произошла ошибка: {str(e)}")
+        logging.error(f"Error in scenario generation: {e}")
+        return "Произошла ошибка при генерации сценария. Попробуйте еще раз."
 
 
 if __name__ == "__main__":

@@ -1,5 +1,11 @@
 import sqlite3
 from sqsnip import database as db
+from contextlib import contextmanager
+import logging
+
+
+class DatabaseError(Exception):
+    pass
 
 
 class database:
@@ -544,3 +550,37 @@ class database:
         except Exception as e:
             print(f"Error deleting complaint: {e}")
             return False
+
+    @contextmanager
+    def transaction(self):
+        """Контекстный менеджер для транзакций"""
+        try:
+            yield
+            self.database.commit()
+        except Exception as e:
+            self.database.rollback()
+            logging.error(f"Database transaction failed: {e}")
+            raise DatabaseError(f"Database error: {e}")
+
+    def safe_execute(self, query: str, params: tuple = None):
+        """Безопасное выполнение запросов"""
+        try:
+            with self.transaction():
+                return self.database.execute(query, params)
+        except sqlite3.Error as e:
+            logging.error(f"Database query failed: {query}, params: {params}, error: {e}")
+            raise DatabaseError(f"Database query failed: {e}")
+
+    def get_active_complaints(self):
+        """Получение списка активных жалоб"""
+        try:
+            cursor = self.database.execute(
+                "SELECT id, from_user, against_user, complaint_text, status, timestamp "
+                "FROM complaints "
+                "WHERE status = 'pending' "
+                "ORDER BY timestamp DESC"
+            )
+            return cursor.fetchall()
+        except Exception as e:
+            logging.error(f"Error getting active complaints: {e}")
+            return None
