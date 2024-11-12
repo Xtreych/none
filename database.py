@@ -429,15 +429,20 @@ class database:
             print(f"Error getting chat history: {e}")
             return []
 
-    def block_user(self, user_id: int, hours: int, reason: str = None) -> bool:
+    def block_user(self, user_id: int, hours: int, reason: str) -> bool:
         try:
             self.database.execute("""
-                INSERT OR REPLACE INTO user_blocks (user_id, blocked_until, reason)
-                VALUES (?, datetime('now', '+' || ? || ' hours'), ?)
+                INSERT INTO user_blocks (user_id, blocked_until, reason)
+                VALUES (
+                    ?, 
+                    datetime('now', 'localtime', '+' || ? || ' hours'),
+                    ?
+                )
             """, (user_id, hours, reason))
+            self.database.db.commit()
             return True
         except Exception as e:
-            print(f"Error in block_user: {e}")
+            print(f"Error blocking user: {e}")
             return False
 
     def is_user_blocked(self, user_id: int) -> tuple[bool, str]:
@@ -501,14 +506,30 @@ class database:
             return self.database.execute("""
                 SELECT 
                     b.user_id,
-                    b.blocked_until,
+                    strftime('%Y-%m-%d %H:%M:%S', b.blocked_until, 'localtime'),
                     b.reason,
                     c.id as complaint_id
                 FROM user_blocks b
                 LEFT JOIN complaints c ON c.against_user = b.user_id AND c.status = 'approved'
-                WHERE b.blocked_until > datetime('now')
+                WHERE b.blocked_until > datetime('now', 'localtime')
                 ORDER BY b.blocked_until DESC
             """)
         except Exception as e:
             print(f"Error getting blocked users: {e}")
             return []
+
+    def get_block_info(self, user_id: int) -> tuple:
+        try:
+            result = self.database.execute("""
+                SELECT 
+                    strftime('%Y-%m-%d %H:%M:%S', b.blocked_until, 'localtime'),
+                    b.reason,
+                    c.id as complaint_id
+                FROM user_blocks b
+                LEFT JOIN complaints c ON c.against_user = b.user_id AND c.status = 'approved'
+                WHERE b.user_id = ? AND b.blocked_until > datetime('now', 'localtime')
+            """, (user_id,))[0]
+            return result
+        except Exception as e:
+            print(f"Error getting block info: {e}")
+            return None

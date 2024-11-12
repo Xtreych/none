@@ -8,6 +8,7 @@ from aiogram.filters import Command
 from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, \
     KeyboardButton, ReplyKeyboardMarkup
 from database import database
+from aiogram.exceptions import TelegramBadRequest
 
 import keyboard
 import generator_scenary
@@ -51,12 +52,80 @@ Serj = 686803928
 
 user_states = {}
 
+# Функция для проверки блокировки и отправки сообщения
+async def check_user_block(user_id: int, message: Message = None, callback: CallbackQuery = None) -> bool:
+    is_blocked, reason = db.is_user_blocked(user_id)
+    if is_blocked:
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="ℹ️ Информация о блокировке", callback_data="block_info")]
+        ])
+        
+        text = "⛔️ Ваш аккаунт заблокирован.\nНажмите кнопку ниже для получения информации о блокировке."
+        
+        if message:
+            await message.answer(text, reply_markup=keyboard)
+        elif callback:
+            await callback.message.edit_text(text, reply_markup=keyboard)
+            
+        return True
+    return False
+
+# Обработчик информации о блокировке
+@dp.callback_query(F.data == "block_info")
+async def show_block_info(callback: CallbackQuery):
+    user_id = callback.from_user.id
+    is_blocked, reason = db.is_user_blocked(user_id)
+    
+    if not is_blocked:
+        await callback.message.edit_text(
+            "✅ Ваш аккаунт не заблокирован.",
+            reply_markup=get_main_keyboard(user_id)
+        )
+        return
+
+    block_info = db.get_block_info(user_id)
+    if not block_info:
+        await callback.answer("Ошибка получения информации о блокировке", show_alert=True)
+        return
+
+    blocked_until, reason, complaint_id = block_info
+    
+    # Вычисляем оставшееся время с учетом часового пояса
+    current_time = datetime.now()
+    block_until = datetime.strptime(blocked_until, '%Y-%m-%d %H:%M:%S')
+    time_left = block_until - current_time
+    
+    # Округляем время до ближайшей минуты
+    total_minutes = int(time_left.total_seconds() / 60)
+    hours_left = total_minutes // 60
+    minutes_left = total_minutes % 60
+
+    message_text = (
+        f"⛔️ Информация о блокировке:\n\n"
+        f"📝 Причина: {reason}\n"
+        f"🔢 Номер жалобы: #{complaint_id if complaint_id else 'Н/Д'}\n"
+        f"⏳ Осталось времени: {hours_left}ч {minutes_left}мин\n"
+        f"📅 Разблокировка: {block_until.strftime('%d.%m.%Y %H:%M')}"
+    )
+
+    try:
+        await callback.message.edit_text(
+            message_text,
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🔄 Обновить", callback_data="block_info")]
+            ])
+        )
+    except TelegramBadRequest as e:
+        if "message is not modified" in str(e):
+            await callback.answer("Информация актуальна", show_alert=True)
+
 @dp.message(Command("start"))
 async def start_message(message: Message):
     user = db.get_user_cursor(message.from_user.id)
     idinty = message.from_user.id
-
-    if user is None:
+    if await check_user_block(message.from_user.id, message=message):
+        return
+    elif user is None:
         db.new_user(message.from_user.id)
         await message.answer(
             "👥 Добро пожаловать в Чат-бот ролевиков!\n"
@@ -95,7 +164,7 @@ async def referral_code_request(message: Message):
         # Если пользователь владелец кода, показываем статистику
         response = "📊 Ваша реферальная статисика:\n\n"
         for code in owned_codes:
-            count = db.count_referral(code[0])  # code[0], так как execute возвращает кортежи
+            count = db.count_referral(code[0])  # code[0], так как execute возвращае кортежи
             count = str(count)
             cleaned_count = re.sub(r"[(),]", "", count)
             response += f"Код: {code[0]}\n"
@@ -108,7 +177,7 @@ async def referral_code_request(message: Message):
     else:
         # Если обычный пользователь, предлагаем ввести код
         await message.answer(
-            "🆔 Пожалуйста, введите реферальный код:",
+            "�� Пожалуйста, введите реферальный код:",
             reply_markup=keyboard.get_back_keyboard()
         )
         user_states[message.from_user.id] = 'awaiting_referral_code'
@@ -125,7 +194,7 @@ async def open_admin_panel(message: Message):
 @dp.callback_query(F.data == "add_ref_code")
 async def add_ref_code_start(callback: CallbackQuery):
     if not db.is_admin(callback.from_user.id):
-        await callback.answer("У вас нет прав администратора!", show_alert=True)
+        await callback.answer("У вас нет прав администраора!", show_alert=True)
         return
 
     user_states[callback.from_user.id] = "waiting_ref_code"
@@ -216,7 +285,7 @@ async def show_ref_stats(callback: CallbackQuery):
             response += f"ID пользователей: {users}\n\n"
     else:
         all_codes = db.get_all_referral_codes()
-        response = "📊 Ваша реферальная статистика:\n\n"
+        response = "📊 Ваша рефральная сттсика:\n\n"
 
         for code, owner_id in all_codes:
             if owner_id == user_id:
@@ -261,7 +330,7 @@ async def search_chat(message: Message):
             else:
                 # Отправляем сообщение обоим пользователям
                 string = "✅ Игрок найден!\n"
-                string += "Чтобы завершить диалог, нажмите \"❌ Завершить диалог\""
+                string += "Чтобы завершить диалог, нажм��те \"❌ Завершить диалог\""
 
                 await message.answer(string, reply_markup=keyboard.get_cancel_keyboard())
                 try:
@@ -365,7 +434,7 @@ async def handle_theme_selection(callback_query: CallbackQuery):
         if user and user["status"] == 2 and user["rid"] != 0:
             await bot.send_message(
                 user["rid"],
-                f"⏳ Ва�� собеседник сгенеривал сценарий:\n\n{scenario}"
+                f"⏳ Ва собеседник сгенеривал сценарий:\n\n{scenario}"
             )
 
     except Exception as e:
@@ -508,7 +577,7 @@ async def back_to_admin(callback: CallbackQuery):
 @dp.callback_query(F.data == "remove_admin")
 async def remove_admin_start(callback: CallbackQuery):
     if callback.from_user.id not in [Bes, Besovskaya, Serj]:
-        await callback.answer("Только главный администратор может удалять администраторов!",
+        await callback.answer("То��ько главный администратор может удалять администраторов!",
                               show_alert=True)
         return
 
@@ -547,7 +616,7 @@ async def remove_admin_confirm(callback: CallbackQuery):
         reply_markup=keyboard.get_admin_keyboard()
     )
 
-# Обработчик для проверки введенного реферального кода
+# Обработчик для проверки введенного реферального код
 async def handle_referral_input(message: Message):
     code = message.text.strip()
     owner_id = db.get_referral_code_owner(code)
@@ -582,7 +651,7 @@ async def handle_complaint(message: Message):
     if user and user["status"] == 2 and user["rid"] != 0:
         user_states[message.from_user.id] = "awaiting_complaint"
         await message.answer(
-            "📝 Опишите причину жалобы на пользователя:",
+            "📝 Опишите причину жалобы на пльзоватея:",
             reply_markup=keyboard.get_back_keyboard()
         )
     else:
@@ -596,6 +665,9 @@ async def handler_message(message: Message):
     user = db.get_user_cursor(message.from_user.id)
     idinty = message.from_user.id
     state = user_states.get(message.from_user.id)
+
+    if await check_user_block(message.from_user.id, message=message):
+        return
 
     if state and state.startswith("awaiting_block_hours_"):
         try:
@@ -621,7 +693,7 @@ async def handler_message(message: Message):
             else:
                 await message.answer("❌ Пожалуйста, введите число от 1 до 168 (часов)")
         except ValueError:
-            await message.answer("❌ Пожалуйста, введите корректное число часов")
+            await message.answer("❌ Пожалуйст��, введите корректное число часов")
         
         user_states[message.from_user.id] = None
         await message.answer(
@@ -714,7 +786,7 @@ async def handler_message(message: Message):
                 if db.add_admin(new_admin_id):
                     await message.answer(f"✅ Администратор (ID: {new_admin_id}) успешно добавлен!")
                 else:
-                    await message.answer("��� Ошибк при добавлении администратора!")
+                    await message.answer("Ошибк при добавлении администратора!")
             except:
                 await message.answer("❌ Неверный формат ID!")
 
@@ -826,7 +898,7 @@ async def view_complaints(callback: CallbackQuery):
     else:
         await bot.send_message(
             callback.from_user.id,
-            "📋 Список активных жалоб:",
+            "📋 ��писок активных жалоб:",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
         )
 
@@ -840,7 +912,7 @@ async def handle_complaint_action(callback: CallbackQuery):
         await callback.answer("Жалоба не найдена", show_alert=True)
         return
 
-    # Безопасное получение значений из кортежа
+    # Безопасное плучение значений из кортежа
     complaint_id = complaint[0]
     from_user = complaint[1]
     against_user = complaint[2]
@@ -974,7 +1046,7 @@ async def manage_blocks(callback: CallbackQuery):
     
     await callback.message.edit_text(
         "🔓 Управление блокировками:\n"
-        "Нажмите на пользователя для досрочной разблокировки",
+        "Нажмите на пользователя для досроч��ой разблокировки",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
     )
 
@@ -1037,7 +1109,13 @@ async def view_archived_complaint(callback: CallbackQuery):
         reply_markup=keyboard
     )
 
-def get_main_keyboard(user_id):
+def get_main_keyboard(user_id: int) -> ReplyKeyboardMarkup:
+    is_blocked, _ = db.is_user_blocked(user_id)
+    
+    if is_blocked:
+        buttons = [[KeyboardButton(text="ℹ️ Информация о блокировке")]]
+        return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
+    
     buttons = []
     buttons.append([KeyboardButton(text="🔎 Найти чат")])
 
@@ -1050,6 +1128,43 @@ def get_main_keyboard(user_id):
     buttons.append([KeyboardButton(text="⚙️ Параметры поиска")])
 
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
+
+@dp.message(F.text == "ℹ️ Информация о блокировке")
+async def show_block_info_button(message: Message):
+    user_id = message.from_user.id
+    is_blocked, reason = db.is_user_blocked(user_id)
+    
+    if not is_blocked:
+        await message.answer(
+            "✅ Ваш аккаунт не заблокирован.",
+            reply_markup=get_main_keyboard(user_id)
+        )
+        return
+
+    block_info = db.get_block_info(user_id)
+    if not block_info:
+        await message.answer("Ошибка получения информации о блокировке")
+        return
+
+    blocked_until, reason, complaint_id = block_info
+    
+    current_time = datetime.now()
+    block_until = datetime.strptime(blocked_until, '%Y-%m-%d %H:%M:%S')
+    time_left = block_until - current_time
+    
+    total_minutes = int(time_left.total_seconds() / 60)
+    hours_left = total_minutes // 60
+    minutes_left = total_minutes % 60
+
+    message_text = (
+        f"⛔️ Информация о блокировке:\n\n"
+        f"📝 Причина: {reason}\n"
+        f"🔢 Номер жалобы: #{complaint_id if complaint_id else 'Н/Д'}\n"
+        f"⏳ Осталось времени: {hours_left}ч {minutes_left}мин\n"
+        f"📅 Разблокировка: {block_until.strftime('%d.%m.%Y %H:%M')}"
+    )
+
+    await message.answer(message_text)
 
 async def main():
     await dp.start_polling(bot)
