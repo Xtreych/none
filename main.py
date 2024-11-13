@@ -1,5 +1,6 @@
 import asyncio
 import re
+import logging
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from typing import Optional
@@ -18,6 +19,21 @@ import generator_scenary
 import backup
 
 from theme import get_full_theme_description
+
+from yookassa import Configuration, Payment
+import uuid
+
+# Настраиваем логирование
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('bot.log'),
+        logging.StreamHandler()
+    ]
+)
+
+logger = logging.getLogger(__name__)
 
 atoken = input("Какой токен используем?\n"
       "1 - тест-бот\n"
@@ -124,7 +140,7 @@ async def show_block_info(callback: CallbackQuery):
     block_until = datetime.strptime(blocked_until, '%Y-%m-%d %H:%M:%S')
     time_left = block_until - current_time
     
-    # Округляем время до ближайшей минуты
+    # Округляем врем до ближайшей минуты
     total_minutes = int(time_left.total_seconds() / 60)
     hours_left = total_minutes // 60
     minutes_left = total_minutes % 60
@@ -150,12 +166,41 @@ async def show_block_info(callback: CallbackQuery):
 
 @dp.message(Command("start"))
 async def start_message(message: Message):
-    user = db.get_user_cursor(message.from_user.id)
-    idinty = message.from_user.id
+    user_id = message.from_user.id
+    user = db.get_user_cursor(user_id)
+    
+    # Проверяем параметры команды start на наличие реферального кода
+    args = message.text.split()
+
     if await check_user_block(message.from_user.id, message=message):
         return
     elif user is None:
-        db.new_user(message.from_user.id)
+        db.new_user(user_id)
+
+        if len(args) > 1:
+            referral_code = args[1]  # Получаем код напрямую
+            if referral_code.startswith("ref_"):
+                referral_code = referral_code[4:]  # Убираем префикс ref_
+                try:
+                    # Проверяем существование кода
+                    owner_id = db.get_referral_code_owner(referral_code)
+                    if owner_id is not None:
+                        # Проверяем, не использовал ли пользователь уже реферальный код
+                        current_ref = db.check_user_referral(user_id)
+                        if current_ref is None:  # Изменено условие проверки
+                            # Применяем реферальный код
+                            if db.update_user_referral(user_id, referral_code):
+                                await message.answer(
+                                    f"✅ Реферальный код успешно применен!"
+                                )
+                            else:
+                                logger.error(f"Failed to apply referral code {referral_code} for user {user_id}")
+                                await message.answer("❌ Ошибка при применении реферального кода")
+                    else:
+                        logger.error(f"Invalid referral code {referral_code} for user {user_id}")
+                except Exception as e:
+                    logger.error(f"Error applying referral code: {e}")
+
         await message.answer(
             "👥 Добро пожаловать в Чат-бот ролевиков!\n"
             "🗣 Наш бот предоставляет возможность поиска соролеров.\n\n"
@@ -164,7 +209,8 @@ async def start_message(message: Message):
             f'- Если у вас возникли вопросы или нужна помощь, не стесняйтесь обращаться к нам!\n'
             f'📞 <a href="{url_TS}">{link_text_TS}</a>\n\n'
             "🤝 Партнёры проекта:\n\n"
-            f'<a href="{url_Tayova}">{link_text_Tayova}</a>', parse_mode='HTML',
+            f'<a href="{url_Tayova}">{link_text_Tayova}</a>', 
+            parse_mode='HTML',
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text='Я девушка', callback_data='gender_female')],
                 [InlineKeyboardButton(text='Я мужчина', callback_data='gender_male')]
@@ -179,8 +225,9 @@ async def start_message(message: Message):
             f'- Если у вас возникли вопросы или нужна помощь, не стесняйтесь обращаться к нам!\n'
             f'📞 <a href="{url_TS}">{link_text_TS}</a>\n\n'
             "🤝 Партнёры проекта:\n\n"
-            f'<a href="{url_Tayova}">{link_text_Tayova}</a>', parse_mode='HTML',
-            reply_markup=get_main_keyboard(idinty)
+            f'<a href="{url_Tayova}">{link_text_Tayova}</a>', 
+            parse_mode='HTML',
+            reply_markup=get_main_keyboard(user_id)
         )
 
 
@@ -197,8 +244,10 @@ async def referral_code_request(message: Message):
                     continue
                 count = db.count_referral(code[0])
                 count = str(count).strip('(),')
+                referral_link = db.create_referral_link(code[0])
                 response += f"Код: {code[0]}\n"
-                response += f"Количество приглашенных: {count}\n\n"
+                response += f"Количество приглашенных: {count}\n"
+                response += f"Ваша реферальная ссылка:\n{referral_link}\n\n"
 
             await message.answer(
                 response,
@@ -211,7 +260,7 @@ async def referral_code_request(message: Message):
             )
             set_user_state(user_id, 'awaiting_referral_code')
     except Exception as e:
-        logging.error(f"Error in referral_code_request: {e}")
+        logger.error(f"Error in referral_code_request: {e}")
         await message.answer("Произошла ошибка. Попробуйте позже.")
 
 @dp.message(F.text == "👨‍💼 Админ-панель")
@@ -295,7 +344,7 @@ async def add_admin_start(callback: CallbackQuery):
 
     set_user_state(callback.from_user.id, "waiting_admin_id")
     await callback.message.edit_text(
-        "Введите ID нового администр��тора:",
+        "Введите ID нового администртора:",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="⬅️ Отмена", callback_data="back_to_admin")]
         ])
@@ -371,7 +420,7 @@ async def search_chat(message: Message):
                     print(f"Error sending message to rival: {e}")
                     # озможно, стоит откатить соединение, если сообщение не удалось отпраить
                     db.stop_chat(message.from_user.id, rival["id"])
-                    await message.answer("Произошла ошибка при подключении к собеседнику. Попробуйте еще раз.")
+                    await message.answer("Произошла ошибка при подключении к собеседнику. Попроуйте еще раз.")
         else:
             await message.answer("Вы уже находитесь в поиске или чате!")
     else:
@@ -513,7 +562,7 @@ async def stop_chat(message: Message):
 
     print(f"Debug: Stopping chat between {idinty} and {rival_id}")
 
-    # Проверяем данные перед обновлением
+    # Проверяем данные пред обновлением
     before_update = db.database.execute(
         "SELECT id, status, rid FROM users WHERE id IN (?, ?)",
         (idinty, rival_id)
@@ -670,7 +719,7 @@ async def handle_referral_input(message: Message):
 async def check_user_status(callback: CallbackQuery):
     user_id = callback.from_user.id
     if db.is_admin(user_id):
-        await callback.answer("Вы являетесь администратором!", show_alert=True)
+        await callback.answer("Вы являетесь админстраторо!", show_alert=True)
     else:
         await callback.answer("Вы обычный пользователь", show_alert=True)
 
@@ -692,57 +741,149 @@ async def handle_complaint(message: Message):
 
 @dp.message()
 async def handler_message(message: Message):
-    try:
-        state = get_user_state(message.from_user.id)
+    user_id = message.from_user.id
+    state = get_user_state(user_id)
+    user = db.get_user_cursor(user_id)
         
-        if state and state.startswith("awaiting_complaint_details_"):
-            reason_number = int(state.split("_")[-1])
-            user = db.get_user_cursor(message.from_user.id)
+    if state and state.startswith("awaiting_complaint_details_"):
+        reason_number = int(state.split("_")[-1])
+        user = db.get_user_cursor(message.from_user.id)
             
-            if user and user["status"] == 2 and user["rid"] != 0:
-                reasons = {
-                    1: "Нарушение анонимности",
-                    2: "Распространение откровенных материалов",
-                    3: "Оскорбления/уничижительные высказывания",
-                    4: "Отклонение от тематики ролевых игр",
-                    5: "Спам/реклама",
-                    6: "Угрозы/агрессивное поведение",
-                    7: "Игнорирование кнопки жалобы",
-                    8: "Негатив к креативности",
-                    9: "Игнорирование администрации"
-                }
+        if user and user["status"] == 2 and user["rid"] != 0:
+            reasons = {
+                1: "Нарушение анонимности",
+                2: "Распространение откровеных материалов",
+                3: "Оскорбления/уничижительные высказывания",
+                4: "Отклонение от тематики ролевых игр",
+                5: "Спам/реклама",
+                6: "Угрозы/агрессивное поведение",
+                7: "Игнорирование кнопки жалобы",
+                8: "Негатив к креативности",
+                9: "Игнорирование администрации"
+            }
                 
-                if reason_number in reasons:
-                    complaint_text = f"Причина: {reasons[reason_number]}"
+            if reason_number in reasons:
+                complaint_text = f"Причина: {reasons[reason_number]}"
                     
-                    if db.add_complaint(message.from_user.id, user["rid"], complaint_text):
-                        await message.answer(
-                            "✅ Жалоба отправлена администрации.",
-                            reply_markup=None
-                        )
-                    else:
-                        await message.answer(
-                            "❌ Произошла ошибка при отправке жалобы.",
-                            reply_markup=None
-                        )
-                else:
+                if db.add_complaint(message.from_user.id, user["rid"], complaint_text):
                     await message.answer(
-                        "❌ Неверная причина жалобы.",
+                        "✅ Жалоба отправлена администрации.",
                         reply_markup=None
                     )
-                    
-    except ValueError as ve:
-        logging.error(f"ValueError in handler_message: {ve}")
-        await message.answer(
-            "❌ Неверный формат данных жалобы.",
-            reply_markup=None
-        )
-    except Exception as e:
-        logging.error(f"Error in handler_message: {e}")
-        await message.answer(
-            "❌ Произошла ошибка при обработке жалобы.",
-            reply_markup=None
-        )
+                else:
+                    await message.answer(
+                        "❌ Произошла ошибка при отправке жалобы.",
+                        reply_markup=None
+                    )
+            else:
+                await message.answer(
+                    "❌ Неверная причина жалобы.",
+                    reply_markup=None
+                )
+
+            # Обработка состояний для реферальных кодов
+    if state == "waiting_ref_code":
+        # Проверяем права администратора
+        if not db.is_admin(user_id):
+            await message.answer("У вас нет прав администратора!")
+            return
+            
+        # Разираем введеннй текст
+        try:
+            code, owner_id = message.text.split()
+            owner_id = int(owner_id)
+            
+            # Проверяем, не существует ли уже такой код
+            existing_codes = db.get_all_referral_codes()
+            if any(code == existing_code[0] for existing_code in existing_codes):
+                await message.answer(
+                    "❌ Такой код уже существует!",
+                    reply_markup=keyboard.get_admin_keyboard()
+                )
+                return
+                
+            # Добавляем новый код
+            if db.add_referral_code(code, owner_id):
+                await message.answer(
+                    f"✅ Реферальный код успешно добавлен!\n"
+                    f"Код: {code}\n"
+                    f"Владелец ID: {owner_id}",
+                    reply_markup=keyboard.get_admin_keyboard()
+                )
+            else:
+                await message.answer(
+                    "❌ Ошибка при добавлении кода",
+                    reply_markup=keyboard.get_admin_keyboard()
+                )
+                
+        except ValueError:
+            await message.answer(
+                "❌ Неверный формат! Используйте формат:\n"
+                "код ID\n"
+                "Например: Tayova19 1095086092",
+                reply_markup=keyboard.get_admin_keyboard()
+            )
+            
+        finally:
+            set_user_state(user_id, None)
+        await handle_referral_input(message)
+    elif state == "awaiting_referral_code":
+        await handle_referral_input(message)
+        set_user_state(user_id, None)
+        return
+    elif state == "awaiting_referral_code":
+        await handle_referral_input(message)
+        set_user_state(user_id, None)
+        return
+
+    # Обработка сообщений в чате
+    if user is not None and user["status"] == 2 and user["rid"] != 0:
+        try:
+            if message.photo:
+                await bot.send_photo(
+                    chat_id=user["rid"],
+                    photo=message.photo[-1].file_id,
+                    caption=message.caption if message.caption else None
+                )
+            elif message.voice:
+                await bot.send_voice(  # Изменено с send_audio на send_voice
+                    chat_id=user["rid"],
+                    voice=message.voice.file_id,
+                    caption=message.caption if message.caption else None
+                )
+            elif message.video_note:
+                await bot.send_video_note(
+                    chat_id=user["rid"],
+                    video_note=message.video_note.file_id
+                )
+            elif message.sticker:
+                await bot.send_sticker(
+                    chat_id=user["rid"],
+                    sticker=message.sticker.file_id
+                )
+            elif message.text:  # Перемещено в конец, так как text может быть в сообщениях с медиа
+                await bot.send_message(
+                    chat_id=user["rid"],
+                    text=message.text
+                )
+        except Exception as e:
+            logging.error(f"Error sending message: {e}")
+            # Если сообщение не удалось отправить, завершаем чат
+            db.stop_chat(user_id, user["rid"])
+            await message.answer(
+                "❌ Произошла ошибка при отправке сообщения.\n"
+                "Чат завершен.",
+                reply_markup=get_main_keyboard(user_id)
+            )
+            try:
+                await bot.send_message(
+                    user["rid"],
+                    "❌ Собеседник не смог получить ваше сообщение.\n"
+                    "Чат завершен.",
+                    reply_markup=get_main_keyboard(user["rid"])
+                )
+            except:
+                pass
 
 @dp.callback_query(F.data == "cancel_complaint")
 async def cancel_complaint(callback: CallbackQuery):
@@ -966,7 +1107,7 @@ async def manage_blocks(callback: CallbackQuery):
     keyboard.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="back_to_admin")])
     
     await callback.message.edit_text(
-        "🔓 Управление блокировками:\n"
+        "🔓 Управление блоировками:\n"
         "Нажмите на пользователя для досрочой разблокировки",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
     )
@@ -1219,7 +1360,7 @@ async def block_user_with_reason(user_id: int, hours: int, reason: str, complain
             try:
                 await bot.send_message(
                     user_id,
-                    f"⛔️ Ваш аккаунт заблокирован на {hours} часов.\n"
+                    f"⛔️ Ваш аккаунт заблокирован а {hours} часов.\n"
                     f"Причина: {reason}\n"
                     "Для получения подробной информации нажмите кнопку ниже.",
                     reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -1324,6 +1465,8 @@ async def view_complaints(callback: CallbackQuery):
         "Нажмите на жалобу для просмотра подробностей",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
     )
+    
+    
 
 async def main():
     await dp.start_polling(bot)

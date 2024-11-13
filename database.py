@@ -584,3 +584,26 @@ class database:
         except Exception as e:
             logging.error(f"Error getting active complaints: {e}")
             return None
+
+    def create_referral_link(self, code: str) -> str:
+        """Создает реферальную ссылку для существующего кода"""
+        try:
+            if self.database.execute("SELECT code FROM referral_codes WHERE code = ?", (code,)):
+                return f"https://t.me/RP_Anon_ChatBot?start=ref_{code}"
+            return None
+        except:
+            return None
+
+    def get_referral_by_link_code(self, link_code: str) -> str:
+        """Получает реферальный код из параметра ссылки"""
+        try:
+            if link_code.startswith("ref_"):
+                code = link_code[4:]  # Убираем префикс 'ref_'
+                result = self.database.execute(
+                    "SELECT code FROM referral_codes WHERE code = ?",
+                    (code,)
+                )
+                return result[0][0] if result else None
+            return None
+        except:
+            return None
